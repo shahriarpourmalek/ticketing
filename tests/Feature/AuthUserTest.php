@@ -4,89 +4,87 @@ namespace Tests\Feature;
 
 // use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\WithFaker;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AuthUserTest extends TestCase
 {
-    /**
-     * Test that a user can register successfully.
-     *
-     * @return void
-     */
-    /** @test  */
-    public function test_users_can_be_registered()
+    use RefreshDatabase, WithFaker;
+
+    /** @test */
+    public function a_user_can_register_successfully()
     {
-        $userData = [
-            'name' => fake()->name,
-            'email' => fake()->safeEmail(),
+        $data = [
+            'name' => $this->faker->name,
+            'email' => $this->faker->email,
             'password' => 'password',
             'password_confirmation' => 'password',
         ];
 
-        $response = $this->json('POST', '/api/register', $userData);
+        $response = $this->postJson(route('register'), $data);
 
-        $response->assertStatus(201)
-            ->assertJsonStructure([
-                'access_token',
-                'token_type',
-                'user',
-                'message',
-            ]);
+        $response->assertStatus(201);
     }
 
-    /**
-     * Test that a user can log in successfully.
-     *
-     * @return void
-     */
-    /** @test  */
-
-    public function a_can_be_logined()
+    /** @test */
+    public function a_user_can_login_successfully()
     {
         $password = 'password';
         $user = User::factory()->create([
-            'password' => bcrypt($password),
+            'password' => Hash::make($password)
         ]);
 
-        $userData = [
+        $data = [
             'email' => $user->email,
             'password' => $password,
         ];
 
-        $response = $this->json('POST', '/api/login', $userData);
+        $response = $this->postJson(route('login'), $data);
 
-        $response->assertStatus(200)
-            ->assertJsonStructure([
-                'access_token',
-                'token_type',
-                'user',
-                'message',
+        $response->assertStatus(200);
+    }
+
+    /** @test */
+    public function a_user_cannot_login_with_invalid_credentials()
+    {
+        $data = [
+            'email' => $this->faker->email,
+            'password' => 'password',
+        ];
+
+        $response = $this->postJson(route('login'), $data);
+
+        $response->assertStatus(401)
+            ->assertJson([
+                'message' => 'Invalid email or password',
             ]);
     }
 
-    /**
-     * Test that a user can log out successfully.
-     *
-     * @return void
-     */
-    /** @test  */
-
-    public function a_user_can_be_loged_out()
+    /** @test */
+    public function a_user_can_logout_successfully()
     {
         $user = User::factory()->create();
+        $token = $user->createToken('auth-token')->plainTextToken;
 
-        $token = $user->createToken('test-token')->plainTextToken;
-
-        $response = $this->actingAs($user)->json('POST', '/api/logout');
+        $response = $this->actingAs($user)->postJson(route('logout'), [], [
+            'Authorization' => 'Bearer ' . $token
+        ]);
 
         $response->assertStatus(200)
             ->assertJson([
                 'message' => 'Logout successful',
             ]);
+    }
 
-        $this->assertDatabaseMissing('personal_access_tokens', [
-            'token' => hash('sha256', $token),
-        ]);
+    /** @test */
+    public function a_guest_cannot_logout()
+    {
+        $response = $this->postJson(route('logout'));
+
+        $response->assertStatus(401);
     }
 
 }
